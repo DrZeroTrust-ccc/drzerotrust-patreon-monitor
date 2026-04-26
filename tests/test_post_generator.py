@@ -38,9 +38,18 @@ def test_post_contains_no_recommendation_language():
     capitol_signals = capitol_trades_monitor.fetch_recent_signals()
     md = build_post(date(2026, 4, 26), sec_signals, capitol_signals).lower()
 
-    forbidden = ["buy now", "sell now", "guaranteed", "insider trading"]
+    forbidden = ["buy now", "sell now", "guaranteed return", "price target"]
     for phrase in forbidden:
         assert phrase not in md, f"forbidden phrase present: {phrase}"
+
+
+def test_post_explicitly_denies_misconduct_allegations():
+    sec_signals = sec_cyber_monitor.fetch_recent_signals()
+    capitol_signals = capitol_trades_monitor.fetch_recent_signals()
+    md = build_post(date(2026, 4, 26), sec_signals, capitol_signals).lower()
+
+    assert "no statement in this post alleges insider trading" in md
+    assert "not investment advice" in md
 
 
 def test_watchlist_lists_each_mock_ticker():
