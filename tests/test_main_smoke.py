@@ -8,7 +8,7 @@ from src.post_generator import output_filename
 
 
 def test_main_writes_dated_markdown_file():
-    out_path = main_module.main()
+    out_path = main_module.main(argv=[])
     assert out_path.exists()
     assert out_path.name == output_filename(date.today())
     content = out_path.read_text(encoding="utf-8")
@@ -17,6 +17,6 @@ def test_main_writes_dated_markdown_file():
 
 
 def test_state_file_recorded():
-    main_module.main()
+    main_module.main(argv=[])
     state_file = Path(main_module.STATE_DIR) / "state.json"
     assert state_file.exists()

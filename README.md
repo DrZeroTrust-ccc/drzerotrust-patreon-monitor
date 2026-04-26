@@ -6,10 +6,18 @@ A draft-generation system that produces Patreon-ready markdown posts
 - **SEC Cyber Incident filings** (8-K Item 1.05 and similar disclosures)
 - **Capitol Hill financial transaction disclosures** (STOCK Act / PTR filings)
 
-Version 1 is **offline and mock-only**. It does not connect to any external
-API, does not scrape any site, and does not publish anything to Patreon.
-It exists to validate the post format, file layout, and module boundaries
-before any live integrations are added.
+Two modes:
+
+- **Mock** (default): everything runs from hard-coded fictional data, no
+  network calls. Use this to validate post format and code paths.
+- **Live SEC** (`--sec-real`): pulls real Form 8-K and 8-K/A cyber-incident
+  filings from SEC EDGAR over the last 24 hours and runs them through a
+  content classifier. Capitol Hill, Google Drive, and Patreon stay mock
+  / no-op for now.
+
+Nothing in this repo posts to Patreon, drafts to Patreon, or scrapes
+Patreon. There are no investment recommendations and no allegations of
+insider trading or other misconduct.
 
 ## What V1 does
 
@@ -77,7 +85,7 @@ pip install -r requirements.txt
 cp .env.example .env   # placeholders only; nothing is required for V1
 ```
 
-## Generate a draft
+## Generate a draft (mock mode)
 
 ```bash
 python -m src.main
@@ -85,6 +93,46 @@ python -m src.main
 
 You should see a new file in `output/` named
 `drzerotrust-market-signal-watch-YYYY-MM-DD.md`.
+
+## Generate a draft with live SEC EDGAR data
+
+```bash
+# 1. Set a real, descriptive User-Agent (SEC requires this).
+#    Edit .env and set SEC_USER_AGENT to your contact info, e.g.:
+#    SEC_USER_AGENT="DrZeroTrust Research Bot chase@drzerotrust.com"
+cp .env.example .env
+
+# 2. Run with --sec-real
+python -m src.main --sec-real
+```
+
+What `--sec-real` does:
+
+- Queries SEC EDGAR full-text search for Form `8-K` and `8-K/A` filings
+  in the last 24 hours that match cyber-incident phrasing (Item 1.05,
+  ransomware, unauthorized access, exfiltration, etc.).
+- Fetches each candidate filing's primary document.
+- Applies a content classifier that requires either an explicit
+  **Item 1.05** heading **or** **Item 8.01** paired with specific-
+  incident language. Generic cybersecurity governance / risk-factor
+  boilerplate is rejected.
+- Computes a Watch Priority (High / Medium / Low) per filing.
+- Falls back to mock data if `SEC_USER_AGENT` is unset.
+- Reports `candidates examined / qualified / rejected` to the console.
+
+Live mode is read-only. Capitol Hill, Google Drive, and Patreon are
+**not** affected by this flag — they remain mock / no-op in V1.
+
+### Notes on the live SEC mode
+
+- A 24-hour window on a weekend or holiday often returns zero qualifying
+  filings. The briefing will simply note "No SEC cyber-incident signals
+  this cycle." That is the expected behavior.
+- The client paces requests (~5 req/s), retries on 429/5xx with backoff,
+  and always sends `User-Agent: ${SEC_USER_AGENT}`. Do not set
+  `SEC_USER_AGENT` to a value that impersonates another organization.
+- The classifier never asserts that a breach occurred unless the filing
+  text says so. Output is public-signal research, not a verdict.
 
 ## Run tests
 

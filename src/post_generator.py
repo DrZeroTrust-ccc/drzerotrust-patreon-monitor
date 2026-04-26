@@ -108,7 +108,8 @@ def _build_bluf(
     )
 
     overlap = sorted(
-        {s.ticker for s in sec_signals} & {t.ticker for t in capitol_signals}
+        {s.ticker for s in sec_signals if s.ticker}
+        & {t.ticker for t in capitol_signals if t.ticker}
     )
     if overlap:
         bullets.append(
@@ -126,7 +127,8 @@ def _build_bluf(
         )
 
     sectors = sorted(
-        {s.sector for s in sec_signals} | {t.sector for t in capitol_signals}
+        {s.sector for s in sec_signals if s.sector}
+        | {t.sector for t in capitol_signals if t.sector}
     )
     if sectors:
         bullets.append(
@@ -141,45 +143,50 @@ def _build_bluf(
     return "\n".join(f"- {b}" for b in bullets[:5])
 
 
+def _sec_dedup_key(s: SecCyberSignal) -> str:
+    return s.ticker or f"CIK:{s.cik}" or s.accession_number
+
+
 def _watchlist_rows(
     sec_signals: List[SecCyberSignal],
     capitol_signals: List[CapitolTradeSignal],
 ) -> List[Tuple[str, str, str, str, str]]:
     """Return one row per ticker: (signal, entity, ticker, why, priority)."""
-    by_ticker: dict[str, dict] = {}
+    by_key: dict[str, dict] = {}
     for s in sec_signals:
-        entry = by_ticker.setdefault(s.ticker, {
+        entry = by_key.setdefault(_sec_dedup_key(s), {
             "company": s.company,
-            "sector": s.sector,
+            "ticker": s.ticker or "—",
             "sec": None,
             "capitol": None,
         })
         entry["sec"] = s
     for t in capitol_signals:
-        entry = by_ticker.setdefault(t.ticker, {
+        entry = by_key.setdefault(t.ticker, {
             "company": t.company,
-            "sector": t.sector,
+            "ticker": t.ticker,
             "sec": None,
             "capitol": None,
         })
         entry["capitol"] = t
 
     rows: List[Tuple[str, str, str, str, str]] = []
-    for ticker, info in by_ticker.items():
+    for info in by_key.values():
         sec = info["sec"]
         cap = info["capitol"]
         if sec and cap:
             signal = "Cyber + Policy"
             why = (
-                f"SEC {sec.filing_type} {sec.filing_item} disclosure overlaps "
-                f"with a {cap.transaction_type.lower()} from a filer on "
-                f"{cap.committee}."
+                f"SEC {sec.filing_type} Item {sec.item_number} disclosure "
+                f"overlaps with a {cap.transaction_type.lower()} from a "
+                f"filer on {cap.committee}."
             )
         elif sec:
             signal = "Cyber"
+            sector_phrase = f" in {sec.sector}" if sec.sector else ""
             why = (
-                f"SEC {sec.filing_type} {sec.filing_item} disclosure in "
-                f"{sec.sector}."
+                f"SEC {sec.filing_type} Item {sec.item_number} disclosure"
+                f"{sector_phrase}."
             )
         else:
             signal = "Policy"
@@ -190,7 +197,7 @@ def _watchlist_rows(
         priority = _max_priority(
             [sec.priority if sec else "", cap.priority if cap else ""]
         )
-        rows.append((signal, info["company"], ticker, why, priority))
+        rows.append((signal, info["company"], info["ticker"], why, priority))
 
     rows.sort(key=lambda r: (-_priority_rank(r[4]), r[2]))
     return rows
@@ -218,14 +225,24 @@ def _build_sec_section(signals: List[SecCyberSignal]) -> str:
         return "_No SEC cyber-incident signals this cycle._"
     blocks: List[str] = []
     for s in signals:
+        heading_ticker = f" ({s.ticker})" if s.ticker else ""
+        amendment_tag = " — Amendment" if s.is_amendment else ""
+        sector_line = f"- **Sector:** {s.sector}\n" if s.sector else ""
         blocks.append(
-            f"### {s.company} ({s.ticker}) — Watch Priority: {s.priority}\n"
-            f"- **Filing:** {s.filing_type} {s.filing_item}, filed {s.filed_at}\n"
-            f"- **Sector:** {s.sector}\n"
+            f"### {s.company}{heading_ticker} — Watch Priority: "
+            f"{s.priority}{amendment_tag}\n"
+            f"- **Filing:** {s.filing_type} Item {s.item_number}, filed "
+            f"{s.filing_date} (CIK {s.cik}, accession "
+            f"{s.accession_number})\n"
+            f"{sector_line}"
+            f"- **Incident type:** {s.incident_type}\n"
             f"- **Incident summary:** {s.summary}\n"
+            f"- **Quoted excerpt:** > {s.quoted_excerpt}\n"
+            f"- **Materiality status:** {s.materiality_status}\n"
+            f"- **Impact status:** {s.impact_status}\n"
             f"- **Market relevance:** {s.market_relevance}\n"
             f"- **What to watch next:** {s.what_to_watch_next}\n"
-            f"- **Source:** <{s.source_url}>"
+            f"- **Source:** <{s.sec_url}>"
         )
     return "\n\n".join(blocks)
 
@@ -266,7 +283,8 @@ def _build_conflict_lens(
     )
 
     sectors = sorted(
-        {s.sector for s in sec_signals} | {t.sector for t in capitol_signals}
+        {s.sector for s in sec_signals if s.sector}
+        | {t.sector for t in capitol_signals if t.sector}
     )
     if not sectors:
         return intro + "\n\n_No sector overlap to map this cycle._"
@@ -289,9 +307,10 @@ def _build_source_links(
 ) -> str:
     lines: List[str] = []
     for s in sec_signals:
+        ticker_part = f" ({s.ticker})" if s.ticker else ""
         lines.append(
-            f"- {s.company} ({s.ticker}) {s.filing_type} {s.filing_item}: "
-            f"<{s.source_url}>"
+            f"- {s.company}{ticker_part} {s.filing_type} Item {s.item_number}: "
+            f"<{s.sec_url}>"
         )
     for t in capitol_signals:
         lines.append(f"- {t.filer} PTR for {t.ticker}: <{t.source_url}>")

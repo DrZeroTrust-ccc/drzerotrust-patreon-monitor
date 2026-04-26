@@ -66,7 +66,11 @@ def test_sec_section_has_per_signal_fields():
     for s in sec_signals:
         assert s.company in md
         assert s.ticker in md
-        assert s.filing_item in md
+        assert f"Item {s.item_number}" in md
+    assert "Incident type:" in md
+    assert "Quoted excerpt:" in md
+    assert "Materiality status:" in md
+    assert "Impact status:" in md
     assert "Market relevance:" in md
     assert "What to watch next:" in md
 
