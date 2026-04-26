@@ -1,0 +1,6 @@
+# Runtime dependencies for V1 (mock-only).
+# Kept intentionally tiny - V1 does not perform network I/O.
+python-dotenv>=1.0.0
+
+# Test dependencies
+pytest>=8.0.0
